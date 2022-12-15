@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="poc-get-impl" doc:id="1e2c80dc-9dbf-4b24-9dcf-5b5f6321f2a3" >
+		<logger level="INFO" doc:name="entry-log" doc:id="cf4ebacf-5719-4ae0-a02d-8d88b80534d6" message="Request Recieved for Get Path"/>
+		<ee:transform doc:name="preparing-response" doc:id="05d8629f-4131-446f-826e-251137709d71">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var datetime = (now() >> "IST") as String {format: "dd-MM-yyyy hh:mm"}
+var AMPM = (now() >> "IST") as String {format: " a"}
+---
+{
+  uniqueId: attributes.headers.vendorName ++ " - " ++ uuid(),
+  currentDate: datetime ++ AMPM,
+  status: "Success"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="end-log" doc:id="8b70f4fa-ba7a-4fb3-9e02-4a9ef14c7af8" message="Successful Response for Get Path"/>
+	</flow>
+	<flow name="poc-post-json-impl" doc:id="6835b8a7-9ade-425f-a313-0c1c606afdec" >
+		<logger level="INFO" doc:name="entry-log" doc:id="dcec103c-ab47-48ee-86b6-7c3068305035" message="Request Recieved for POST Path" />
+		<choice doc:name="Choice" doc:id="a8d0d973-9bef-4554-ad0d-8a19f5f0c9fb" >
+			<when expression="#[payload.noOfRecords as Number == sizeOf(payload.records)]">
+				<ee:transform doc:name="csv-transformation" doc:id="cda9a722-9cf9-4f64-83c2-a237eb3f1fbb">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=true,separator=";"
+---
+payload.records map {
+    "order-id": payload.orderId,
+    "user-name": upper($.name),
+    "phone-number": "+91 " ++ $.contactNo,
+    "mail": $.emailId
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<logger level="INFO" doc:name="end-log" doc:id="df1d4254-dc52-44d6-852e-2e457dfb3a23" message="Successful Response for POST Path" />
+			</when>
+			<otherwise >
+				<ee:transform doc:name="error-response" doc:id="494a0cfd-2f2c-430c-8f1b-e98da371e057">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "errorMessage" : "The no. of records counts doesn’t match with the records in an array",
+  "status": "Failed"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="poc-post-xml-impl" doc:id="bcef3bd1-1328-4883-82a4-c6e88ea1b6db" >
+		<logger level="INFO" doc:name="entry-log" doc:id="4c5b5760-8134-4dc8-992c-97b72dfcad80" message="Request Recieved for POST Path" />
+		<choice doc:name="Choice" doc:id="3bf3c64a-ce8c-4b23-acc2-c0bc2180bf37" >
+			<when expression="#[payload.orders.noOfRecords as Number  == sizeOf(payload.orders.*records)]">
+				<ee:transform doc:name="csv-transformation" doc:id="c83bbec8-342c-4616-bc2a-84b05afee31a">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=true,separator=";"
+---
+payload.orders.*records map {
+    "order-id": payload.orders.orderId,
+    "user-name": upper($.name),
+    "phone-number": "+91 " ++ $.contactNo,
+    "mail": $.emailId
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<logger level="INFO" doc:name="end-log" doc:id="5cffe936-90a6-4c47-b773-ee02671a6b4b" message="Successful Response for POST Path" />
+			</when>
+			<otherwise >
+				<ee:transform doc:name="error-response" doc:id="418edd5b-5317-4afd-917c-14ef23802dc8">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "errorMessage" : "The no. of records counts doesn’t match with the records in an array",
+  "status": "Failed"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
