@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="73932c15-0202-4985-b355-027f367807db" >
+		<http:request-connection protocol="HTTPS" host="dummy.restapiexample.com" />
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="8ecb1fcd-7f2d-4ee4-a047-6e395d110517" >
+		<db:my-sql-connection host="localhost" port="8080" user="root" password="root" database="emp_data" />
+	</db:config>
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="3b223003-2e00-4aab-a86d-5179771f4a21" >
+		<db:my-sql-connection host="localhost" port="3306" user="${secure::mysql.username}" password="${secure::mysql.password}" database="emp_data" />
+	</db:config>
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="bd51a5e0-4618-4ac5-9176-974807233e26" file="property.yaml" key="mulepocInvenio12" />
+	<flow name="emp-db-apiFlow" doc:id="8ee0d4d2-a0cf-4d68-aa86-4c0180a8a0fa" >
+		<scheduler doc:name="Scheduler-for-triggering-the-flow" doc:id="abc9fd04-50cf-48ac-abfa-04132d5e8b0f" >
+			<scheduling-strategy >
+				<cron expression="0 0/5 * 1/1 * ? *" />
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO" doc:name="Entry-Log" doc:id="463dacb6-8ab9-4311-9c11-9847e553462f" message="Started"/>
+		<http:request method="GET" doc:name="Request-for-get-empdata" doc:id="d6153a75-1bd2-42ba-88df-fd921de10478" url="https://dummy.restapiexample.com/api/v1/employees"/>
+		<logger level="INFO" doc:name="Logger" doc:id="0f21dd5b-d0e0-45ab-b813-4128a94e66d0" message="#[payload]"/>
+		<ee:transform doc:name="filtering-emp" doc:id="275e04e6-75dc-4308-ba67-c24b49bae127" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+
+	payload.data filter
+	($.employee_age>60)
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="82424506-aaf9-4e5f-b963-e882f34c578a" >
+			<db:insert doc:name="Insert-data" doc:id="fc3d1d3b-30c0-4fda-bf6b-32a5ad9e6508" config-ref="Database_Config1">
+			<db:sql><![CDATA[INSERT INTO emp (no, age, name, salary)  VALUES (:NO,:AGE,:NAME,:SALARY)]]></db:sql>
+				<db:input-parameters ><![CDATA[#[{
+	"NO": payload.id,
+	"NAME": payload.employee_name,
+	"SALARY": payload.employee_salary,
+	"AGE": payload.employee_age
+}]]]></db:input-parameters>
+		</db:insert>
+		</parallel-foreach>
+		<logger level="INFO" doc:name="End Log" doc:id="a56a6ba9-8d35-4831-be31-35abb6b8d81f" message="The Data has been uploaded in Database"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="e6ffeb37-e610-4fab-b440-b59e902d136f" >
+				<ee:transform doc:name="error-handling" doc:id="c1e52ea7-7666-4436-8689-11f089cbf84f" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{"Error": error.cause.message}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+</mule>
